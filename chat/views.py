@@ -1,136 +1,125 @@
-from rest_framework.views import APIView
+import json
+from django.http import StreamingHttpResponse
+from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
-from documents.models import Document
-from documents.services.rag_service import build_rag_context
-from documents.services.llm_service import generate_answer
-
 from .models import Conversation, Message
-from .serializers import AskQuestionSerializer
+from .serializers import ConversationSerializer, MessageSerializer, AskQuestionSerializer
+from chat.services.chat_service import ask_question
+from chat.services.memory_service import build_conversation_history, add_message
+from documents.services.rag_service import build_rag_context
+from documents.services.llm_service import generate_answer_stream, generate_follow_up_actions
+from documents.models import Document
 
 
-class AskQuestionView(APIView):
+class ConversationViewSet(viewsets.ModelViewSet):
 
+    serializer_class = ConversationSerializer
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
+    def get_queryset(self):
+        return Conversation.objects.filter(user=self.request.user)
 
-        # =====================================================
-        # 1. VALIDATION DES DONNÉES
-        # =====================================================
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
-        serializer = AskQuestionSerializer(
-            data=request.data
-        )
+    @action(detail=True, methods=["get"])
+    def messages(self, request, pk=None):
+        conversation = self.get_object()
+        messages = conversation.messages.all()
+        serializer = MessageSerializer(messages, many=True)
+        return Response(serializer.data)
 
+    @messages.mapping.post
+    def add_message(self, request, pk=None):
+        conversation = self.get_object()
+
+        if conversation.user != request.user:
+            return Response({"detail": "Non autorisé."}, status=status.HTTP_403_FORBIDDEN)
+
+        if conversation.document and conversation.document.uploaded_by != request.user:
+            return Response({"detail": "Document non autorisé."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = AskQuestionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
         question = serializer.validated_data["question"]
-        document_id = serializer.validated_data["document_id"]
-        conversation_id = serializer.validated_data.get(
-            "conversation_id"
-        )
 
-        # =====================================================
-        # 2. RÉCUPÉRER LE DOCUMENT
-        # =====================================================
+        result = ask_question(conversation, question)
+        return Response(result, status=status.HTTP_200_OK)
 
-        try:
-            document = Document.objects.get(
-                id=document_id,
-                uploaded_by=request.user
-            )
+    @action(detail=True, methods=["post"], url_path="stream")
+    def stream(self, request, pk=None):
+        """
+        Endpoint SSE : POST /api/chat/conversations/{id}/stream/
+        Body: { "question": "...", "document_id": <optional> }
 
-        except Document.DoesNotExist:
+        Retourne la réponse IA progressivement via Server-Sent Events.
+        Le frontend écoute avec EventSource ou fetch + ReadableStream.
+        """
+        conversation = self.get_object()
 
-            return Response(
-                {
-                    "detail": "Document introuvable ou accès interdit."
-                },
-                status=status.HTTP_404_NOT_FOUND
-            )
+        if conversation.user != request.user:
+            return Response({"detail": "Non autorisé."}, status=status.HTTP_403_FORBIDDEN)
 
-        # =====================================================
-        # 3. RÉCUPÉRER OU CRÉER LA CONVERSATION
-        # =====================================================
-
-        if conversation_id:
-
-            try:
-                conversation = Conversation.objects.get(
-                    id=conversation_id,
-                    user=request.user
-                )
-
-            except Conversation.DoesNotExist:
-
+        # Validation document si la conversation y est liée
+        document = conversation.document
+        if document:
+            if document.uploaded_by != request.user:
+                return Response({"detail": "Document non autorisé."}, status=status.HTTP_403_FORBIDDEN)
+            if document.status != Document.Status.READY:
                 return Response(
-                    {
-                        "detail": "Conversation introuvable."
-                    },
-                    status=status.HTTP_404_NOT_FOUND
+                    {"detail": "Le document n'est pas encore prêt (statut: %s)." % document.status},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-        else:
+        serializer = AskQuestionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        question = serializer.validated_data["question"]
+        complexity = serializer.validated_data.get("complexity", "normal")
 
-            conversation = Conversation.objects.create(
-                user=request.user,
-                document=document,
-                title=question[:255]
-            )
+        # 1. Historique de mémoire
+        history = build_conversation_history(conversation, limit=10)
 
-        # =====================================================
-        # 4. SAUVEGARDER LA QUESTION
-        # =====================================================
+        # 2. Sauvegarde de la question utilisateur
+        add_message(conversation, "user", question)
 
-        Message.objects.create(
-            conversation=conversation,
-            role="USER",
-            content=question
+        # 3. RAG context
+        document_id = document.id if document else None
+        rag_result = build_rag_context(question, n_results=3, document_id=document_id)
+        context = rag_result["context"]
+        sources = rag_result["sources"]
+
+        # 4. SSE generator
+        def event_stream():
+            full_answer = ""
+
+            # Envoyer les sources en premier événement
+            yield f"event: sources\ndata: {json.dumps(sources, ensure_ascii=False)}\n\n"
+
+            # Streamer les tokens de la réponse
+            for chunk in generate_answer_stream(question, context, history, complexity=complexity):
+                full_answer += chunk
+                # Format SSE standard : "data: ...\n\n"
+                payload = json.dumps({"token": chunk}, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
+
+            # Générer et envoyer les actions de suivi
+            actions = generate_follow_up_actions(question, full_answer)
+            yield f"event: follow_up\ndata: {json.dumps(actions, ensure_ascii=False)}\n\n"
+
+            # Événement final indiquant la fin du stream
+            yield f"event: done\ndata: {json.dumps({'answer': full_answer}, ensure_ascii=False)}\n\n"
+
+            # Sauvegarder la réponse complète en BDD
+            add_message(conversation, "assistant", full_answer)
+
+        response = StreamingHttpResponse(
+            event_stream(),
+            content_type="text/event-stream"
         )
-
-        # =====================================================
-        # 5. RECHERCHE RAG
-        # =====================================================
-
-        rag_result = build_rag_context(
-            question,
-            n_results=3,
-            document_id=document.id
-        )
-
-        # =====================================================
-        # 6. GÉNÉRATION GEMINI
-        # =====================================================
-
-        answer = generate_answer(
-            question,
-            rag_result["context"]
-        )
-
-        # =====================================================
-        # 7. SAUVEGARDER LA RÉPONSE
-        # =====================================================
-
-        Message.objects.create(
-            conversation=conversation,
-            role="ASSISTANT",
-            content=answer
-        )
-
-        # =====================================================
-        # 8. RÉPONSE API
-        # =====================================================
-
-        return Response(
-            {
-                "conversation_id": conversation.id,
-                "question": question,
-                "answer": answer,
-                "sources": rag_result["sources"]
-            },
-            status=status.HTTP_200_OK
-        )
-
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response

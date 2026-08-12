@@ -32,6 +32,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        read_only_fields = ["id", "messages", "created_at", "updated_at"]
 
 
 class AskQuestionSerializer(serializers.Serializer):
@@ -40,12 +41,8 @@ class AskQuestionSerializer(serializers.Serializer):
         required=True,
         allow_blank=False
     )
-
-    document_id = serializers.IntegerField(
-        required=True
-    )
-
-    conversation_id = serializers.IntegerField(
-        required=False,
-        allow_null=True
-    )
+    complexity = serializers.ChoiceField(
+        choices=[("simple", "Simple"), ("normal", "Normal"), ("expert", "Expert")],
+        default="normal",
+        required=False
+    )

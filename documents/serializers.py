@@ -16,6 +16,7 @@ class DocumentSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "title",
+            "status",
             "file",
             "uploaded_by",
             "uploaded_at",
@@ -24,6 +25,7 @@ class DocumentSerializer(serializers.ModelSerializer):
 
         read_only_fields = [
             "id",
+            "status",
             "uploaded_by",
             "uploaded_at",
             "updated_at",

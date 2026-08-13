@@ -10,6 +10,12 @@ def main():
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
+        # Auto-fallback to virtual environment python if available
+        import subprocess
+        venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'venv', 'Scripts', 'python.exe')
+        if os.path.exists(venv_python) and sys.executable != venv_python:
+            sys.exit(subprocess.call([venv_python] + sys.argv))
+
         raise ImportError(
             "Couldn't import Django. Are you sure it's installed and "
             "available on your PYTHONPATH environment variable? Did you "

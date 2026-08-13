@@ -33,6 +33,7 @@ def search_similar_chunks(question, n_results=3, document_id=None):
             "document_id": metadata.get("document_id"),
             "document_title": metadata.get("document_title"),
             "chunk_index": metadata.get("chunk_index"),
+            "page": metadata.get("page"),
             "distance": distance,
         })
 

@@ -4,8 +4,25 @@ from django.conf import settings
 
 class Document(models.Model):
 
+    class Status(models.TextChoices):
+        UPLOADED = "UPLOADED", "Uploaded"
+        PROCESSING = "PROCESSING", "Processing"
+        READY = "READY", "Ready"
+        FAILED = "FAILED", "Failed"
+
     title = models.CharField(
         max_length=255
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.UPLOADED
+    )
+
+    error_message = models.TextField(
+        blank=True,
+        default=""
     )
 
     file = models.FileField(
@@ -46,6 +63,12 @@ class DocumentChunk(models.Model):
     content = models.TextField()
 
     chunk_index = models.PositiveIntegerField()
+
+    page = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Numéro de page du PDF d'origine"
+    )
 
     created_at = models.DateTimeField(
         auto_now_add=True

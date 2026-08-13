@@ -44,7 +44,8 @@ def generate_embeddings_for_document(document):
         metadatas.append({
             "document_id": document.id,
             "document_title": document.title,
-            "chunk_index": chunk.chunk_index
+            "chunk_index": chunk.chunk_index,
+            "page": chunk.page or 0
         })
 
     # Génération des embeddings
@@ -62,3 +63,12 @@ def generate_embeddings_for_document(document):
     )
 
     return len(chunks)
+
+
+def delete_document_embeddings(document_id):
+    """
+    Supprime les chunks d'un document dans ChromaDB.
+    """
+    collection.delete(
+        where={"document_id": document_id}
+    )

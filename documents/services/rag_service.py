@@ -23,6 +23,7 @@ def build_rag_context(question, n_results=3, document_id=None):
         context_parts.append(
             f"[SOURCE {index}]\n"
             f"Document: {result['document_title']}\n"
+            f"Page: {result.get('page', '?')}\n"
             f"Chunk: {result['chunk_index']}\n"
             f"Content:\n{result['content']}"
         )
@@ -32,6 +33,7 @@ def build_rag_context(question, n_results=3, document_id=None):
             "document_id": result["document_id"],
             "document_title": result["document_title"],
             "chunk_index": result["chunk_index"],
+            "page": result.get("page"),
             "distance": result["distance"]
         })
 

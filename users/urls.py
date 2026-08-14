@@ -4,11 +4,18 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-from .views import RegisterView, ProfileView
+from .views import (
+    RegisterView,
+    ProfileView,
+    AdminUserListView,
+    AdminUserDetailView,
+    AuditLogListView,
+)
 
 
 urlpatterns = [
 
+    # ── Authentification ──────────────────────────────────
     path(
         "register/",
         RegisterView.as_view(),
@@ -31,5 +38,24 @@ urlpatterns = [
         "profile/",
         ProfileView.as_view(),
         name="profile"
+    ),
+
+    # ── Administration (ADMIN uniquement) ─────────────────
+    path(
+        "admin/users/",
+        AdminUserListView.as_view(),
+        name="admin-user-list"
+    ),
+
+    path(
+        "admin/users/<int:pk>/",
+        AdminUserDetailView.as_view(),
+        name="admin-user-detail"
+    ),
+
+    path(
+        "admin/audit-log/",
+        AuditLogListView.as_view(),
+        name="admin-audit-log"
     ),
 ]

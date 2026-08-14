@@ -65,6 +65,18 @@ class User(AbstractBaseUser, PermissionsMixin):
         default=Role.APPRENANT
     )
 
+    max_documents = models.PositiveIntegerField(
+        default=10
+    )
+
+    max_storage_bytes = models.BigIntegerField(
+        default=50_000_000 # 50 MB
+    )
+
+    used_storage_bytes = models.BigIntegerField(
+        default=0
+    )
+
     is_active = models.BooleanField(
         default=True
     )

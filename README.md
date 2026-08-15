@@ -2,7 +2,7 @@
 
 Backend complet pour une plateforme EdTech innovante, basée sur Django, Django REST Framework, et une architecture multi-agents IA (Gemini).
 
-## 🚀 Fonctionnalités Principales
+##  Fonctionnalités Principales
 
 - **Authentification & Gestion des Utilisateurs** : Inscription, JWT, rôles (APPRENANT, ADMINISTRATEUR).
 - **Gestion Documentaire** : Upload PDF, traitement asynchrone (Celery + Redis), extraction de texte, OCR fallback (Tesseract), chunking par page.
@@ -21,7 +21,7 @@ Backend complet pour une plateforme EdTech innovante, basée sur Django, Django 
 - **Quotas & Sécurité** : Limite du nombre de documents et d'espace de stockage par apprenant, isolation des données, log d'audit admin.
 - **Documentation API** : Auto-générée via Swagger (drf-spectacular).
 
-## 🛠 Pré-requis
+##  Pré-requis
 
 - **Python** 3.11+
 - **Redis** (Broker Celery)
@@ -57,7 +57,7 @@ Backend complet pour une plateforme EdTech innovante, basée sur Django, Django 
    celery -A core worker -l info
    ```
 
-### 🐳 Lancement via Docker (Recommandé)
+###  Lancement via Docker (Recommandé)
 
 Le projet inclut un fichier `docker-compose.yml` qui provisionne automatiquement :
 - La base de données PostgreSQL
@@ -72,13 +72,13 @@ docker-compose up --build -d
 
 L'API sera accessible sur `http://localhost:8000`.
 
-## 📚 Documentation de l'API
+##  Documentation de l'API
 
 Une fois le serveur lancé, accédez à la documentation interactive :
 - **Swagger UI** : `http://localhost:8000/api/docs/`
 - **ReDoc** : `http://localhost:8000/api/redoc/`
 
-## ⚙️ Configuration S3 / MinIO
+##  Configuration S3 / MinIO
 
 Si vous souhaitez stocker les documents sur S3 ou MinIO, modifiez le `.env` :
 ```env
